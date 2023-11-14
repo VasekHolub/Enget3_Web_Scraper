@@ -86,26 +86,24 @@ def html_parser() -> str:
 
 
 def link_extractor(parsed_html: str) -> list:
-    a_tags = parsed_html.find_all("a")
+    a_tags = parsed_html.find_all("td", headers=["t1sa2", "t2sa2", "t3sa2"])
     links = list()
     for link in a_tags:
-        if (
-            link.get("href")[:2] == "ps"
-            and link.get("href")
-            not in [
+        try:
+            if link.find("a")["href"][:2] == "ps" and link.find("a")["href"] not in [
                 "ps?xjazyk=CZ",
                 "ps3?xjazyk=CZ",
-            ]
-            and "https://volby.cz/pls/ps2017nss/" + link.get("href") not in links
-        ):
-            links.append("https://volby.cz/pls/ps2017nss/" + link.get("href"))
+            ]:
+                links.append("https://volby.cz/pls/ps2017nss/" + link.find("a")["href"])
+        except TypeError:
+            break
     return links
 
 
 def main():
     system_argv_validity()
     town_links = link_extractor(html_parser())
-    print(town_links)
+    print(sys.argv[2][:-4])
 
 
 if __name__ == "__main__":
