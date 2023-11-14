@@ -45,7 +45,7 @@ Vypsání volebních údajů
             uloženo v elementu <td> s headers="sa3" - vzit a uložit do dictu obce jako key = "envelopes", value = "number"
         platné hlasy
             uloženo v elementu <td> s headers="sa6" - vzit a uložit do dictu obce jako key = "valid", value = "number"
-        kandidující strany (počet hlasů pro všechny hlasy, i když je to 0)
+        kandidující strany (počet hlasů pro všechny strany, i když je to 0)
             vzít všechny <tr> elementy 
             z každého <tr> elementu uložit do dictu obce jako key <td> element s class="overflow_name" (jméno strany)
             a jako value <td> element s headers="t1sa2 t1sb3"
@@ -77,8 +77,8 @@ def system_argv_validity() -> None:
         sys.exit()
 
 
-def html_parser() -> str:
-    response = rq.get(sys.argv[1])
+def html_parser(URL) -> str:
+    response = rq.get(URL)
     if response.status_code == 200:
         return bs(response.text, features="html.parser")
     else:
@@ -121,22 +121,34 @@ def master_dict_builder(town_IDs, town_names, town_links):
     master_dict = dict()
     count = 0
     while count <= len(town_IDs) - 1:
-        keys = ["ID", "Name", "URL"]
-        values = [town_IDs[count], town_names[count], town_links[count]]
+        keys = ["Name", "URL"]
+        values = [town_names[count], town_links[count]]
         town_dict = dict(zip(keys, values))
-        master_dict[count] = town_dict
+        master_dict[town_IDs[count]] = town_dict
         count += 1
     return master_dict
 
 
+def individual_page_data(master_dict):
+    for i in master_dict:
+        content = html_parser(master_dict[i]["URL"])
+        registered = content.find("td", {"headers": "sa2"})
+        master_dict[i]["Registered"] = registered.text.replace("\xa0", " ")
+        envelope = content.find("td", {"headers": "sa3"})
+        master_dict[i]["Envelopes"] = envelope.text.replace("\xa0", " ")
+        valid = content.find("td", {"headers": "sa6"})
+        master_dict[i]["Valid"] = valid.text.replace("\xa0", " ")
+
+
 def main():
     system_argv_validity()
-    td_tags = td_tag_extractor(html_parser())
+    td_tags = td_tag_extractor(html_parser(sys.argv[1]))
     town_links = link_extractor(td_tags)
     town_IDs = town_ID_extractor(td_tags)
-    town_names = town_name_extractor(html_parser())
+    town_names = town_name_extractor(html_parser(sys.argv[1]))
     master_dict = master_dict_builder(town_IDs, town_names, town_links)
-    print(master_dict[96])
+    individual_page_data(master_dict)
+    print(master_dict["589756"])
 
 
 if __name__ == "__main__":
