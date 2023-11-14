@@ -85,10 +85,27 @@ def html_parser() -> str:
         print(f"URL error {response.status_code}")
 
 
-def link_extractor(parsed_html: str) -> list:
-    a_tags = parsed_html.find_all("td", headers=["t1sa2", "t2sa2", "t3sa2"])
+def td_tag_extractor(parsed_html: str) -> list:
+    return parsed_html.find_all("td", {"class": "cislo"})
+
+
+def town_name_extractor(parsed_html):
+    names = list()
+    for name in parsed_html.find_all("td", {"class": "overflow_name"}):
+        names.append(name.text)
+    return names
+
+
+def town_ID_extractor(td_tags):
+    town_id = list()
+    for tag in td_tags:
+        town_id.append(tag.find("a").text)
+    return town_id
+
+
+def link_extractor(td_tags):
     links = list()
-    for link in a_tags:
+    for link in td_tags:
         try:
             if link.find("a")["href"][:2] == "ps" and link.find("a")["href"] not in [
                 "ps?xjazyk=CZ",
@@ -100,10 +117,26 @@ def link_extractor(parsed_html: str) -> list:
     return links
 
 
+def master_dict_builder(town_IDs, town_names, town_links):
+    master_dict = dict()
+    count = 0
+    while count <= len(town_IDs) - 1:
+        keys = ["ID", "Name", "URL"]
+        values = [town_IDs[count], town_names[count], town_links[count]]
+        town_dict = dict(zip(keys, values))
+        master_dict[count] = town_dict
+        count += 1
+    return master_dict
+
+
 def main():
     system_argv_validity()
-    town_links = link_extractor(html_parser())
-    print(sys.argv[2][:-4])
+    td_tags = td_tag_extractor(html_parser())
+    town_links = link_extractor(td_tags)
+    town_IDs = town_ID_extractor(td_tags)
+    town_names = town_name_extractor(html_parser())
+    master_dict = master_dict_builder(town_IDs, town_names, town_links)
+    print(master_dict[96])
 
 
 if __name__ == "__main__":
