@@ -8,6 +8,7 @@ import os
 import csv
 import sys
 import requests as rq
+import re
 from bs4 import BeautifulSoup as bs
 
 
@@ -17,7 +18,7 @@ Vložení vstupních parametrů
         1. je odkaz na územní celek, který chce zpracovat takže pro Prostějov např. 
             https://volby.cz/pls/ps2017nss/ps32?xjazyk=CZ&xkraj=12&xnumnuts=7103
         2. je jméno výstupního souboru (např. vysledky_prostejov.csv)
-to se udělá pomocí podmínky, že sys.argv musí obsahovat platný odkaz (nejspíš to jde udělat tak, že string musí obsahovat "volby.cz")
+to se udělá pomocí podmínky, že sys.argv musí obsahovat platný odkaz (nejspíš to jde udělat tak, že string musí obsahovat "volby.cz" a konec druheho stringu ".csv")
 a také druhý argument, což by mělo jít ošetřit pomocí podmínky len(sys.argv) == 3
 
 Získání odkazů k relevnatním datům
@@ -57,7 +58,7 @@ Export do CSV
 
 
 """
-
+# For dev purposes - delete later
 sys.argv.extend(
     [
         "https://volby.cz/pls/ps2017nss/ps32?xjazyk=CZ&xkraj=12&xnumnuts=7103",
@@ -66,21 +67,49 @@ sys.argv.extend(
 )
 
 
-def system_arg_validity() -> None:
+def system_argv_validity() -> None:
     if (
         len(sys.argv) != 3
-        or "volby.cz" not in sys.argv[1]
+        or "https://volby.cz/pls/ps2017nss/ps32?xjazyk=CZ&x" not in sys.argv[1]
         or sys.argv[2][-4:] != ".csv"
     ):
-        print("Zadejte 2 validni argumenty.")
+        print("Input 2 valid arguments.")
         sys.exit()
 
 
+def html_parser() -> str:
+    response = rq.get(sys.argv[1])
+    if response.status_code == 200:
+        return bs(response.text, features="html.parser")
+    else:
+        print(f"URL error {response.status_code}")
+
+
+def link_extractor(parsed_html: str) -> list:
+    a_tags = parsed_html.find_all("a")
+    links = list()
+    for link in a_tags:
+        if (
+            link.get("href")[:2] == "ps"
+            and link.get("href")
+            not in [
+                "ps?xjazyk=CZ",
+                "ps3?xjazyk=CZ",
+            ]
+            and "https://volby.cz/pls/ps2017nss/" + link.get("href") not in links
+        ):
+            links.append("https://volby.cz/pls/ps2017nss/" + link.get("href"))
+    return links
+
+
 def main():
-    system_arg_validity()
+    system_argv_validity()
+    town_links = link_extractor(html_parser())
+    print(town_links)
 
 
-main()
+if __name__ == "__main__":
+    main()
 """
 years = [2016, 2017, 2018, 2019, 2020, 2021]
 
