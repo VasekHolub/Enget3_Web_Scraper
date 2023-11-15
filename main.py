@@ -121,7 +121,7 @@ def master_dict_builder(town_IDs, town_names, town_links):
     master_dict = dict()
     count = 0
     while count <= len(town_IDs) - 1:
-        keys = ["ID", "Name", "URL"]
+        keys = ["code", "location", "URL"]
         values = [town_IDs[count], town_names[count], town_links[count]]
         town_dict = dict(zip(keys, values))
         master_dict[count] = town_dict
@@ -133,11 +133,11 @@ def individual_page_data(master_dict):
     for i in master_dict:
         content = html_parser(master_dict[i]["URL"])
         registered = content.find("td", {"headers": "sa2"})
-        master_dict[i]["Registered"] = registered.text.replace("\xa0", " ")
+        master_dict[i]["registered"] = registered.text.replace("\xa0", " ")
         envelope = content.find("td", {"headers": "sa3"})
-        master_dict[i]["Envelopes"] = envelope.text.replace("\xa0", " ")
+        master_dict[i]["envelopes"] = envelope.text.replace("\xa0", " ")
         valid = content.find("td", {"headers": "sa6"})
-        master_dict[i]["Valid"] = valid.text.replace("\xa0", " ")
+        master_dict[i]["valid"] = valid.text.replace("\xa0", " ")
         master_dict[i].update(party_scrape(content))
 
 
@@ -154,6 +154,20 @@ def party_scrape(content):
     return party_dict
 
 
+def csv_exporter(master_dict: dict):
+    for i in master_dict:
+        master_dict[i].pop("URL")
+    keys = list(master_dict[0].keys())
+    print(keys)
+    with open(
+        os.path.join(sys.argv[2]), mode="w", encoding="utf-8-sig", newline=""
+    ) as file:
+        writer = csv.DictWriter(file, fieldnames=keys)
+        writer.writeheader()
+        for i in master_dict:
+            writer.writerow(master_dict[i])
+
+
 def main():
     system_argv_validity()
     td_tags = td_tag_extractor(html_parser(sys.argv[1]))
@@ -162,7 +176,7 @@ def main():
     town_names = town_name_extractor(html_parser(sys.argv[1]))
     master_dict = master_dict_builder(town_IDs, town_names, town_links)
     individual_page_data(master_dict)
-    print(master_dict)
+    csv_exporter(master_dict)
 
 
 if __name__ == "__main__":
