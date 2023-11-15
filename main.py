@@ -61,7 +61,7 @@ Export do CSV
 # For dev purposes - delete later
 sys.argv.extend(
     [
-        "https://volby.cz/pls/ps2017nss/ps32?xjazyk=CZ&xkraj=12&xnumnuts=7103",
+        "https://volby.cz/pls/ps2017nss/ps32?xjazyk=CZ&xkraj=4&xnumnuts=3201",
         "prostejov_results.csv",
     ]
 )
@@ -121,10 +121,10 @@ def master_dict_builder(town_IDs, town_names, town_links):
     master_dict = dict()
     count = 0
     while count <= len(town_IDs) - 1:
-        keys = ["Name", "URL"]
-        values = [town_names[count], town_links[count]]
+        keys = ["ID", "Name", "URL"]
+        values = [town_IDs[count], town_names[count], town_links[count]]
         town_dict = dict(zip(keys, values))
-        master_dict[town_IDs[count]] = town_dict
+        master_dict[count] = town_dict
         count += 1
     return master_dict
 
@@ -138,6 +138,20 @@ def individual_page_data(master_dict):
         master_dict[i]["Envelopes"] = envelope.text.replace("\xa0", " ")
         valid = content.find("td", {"headers": "sa6"})
         master_dict[i]["Valid"] = valid.text.replace("\xa0", " ")
+        master_dict[i].update(party_scrape(content))
+
+
+def party_scrape(content):
+    p_party = content.find_all("td", {"class": "overflow_name"})
+    p_party_list = list()
+    for i in p_party:
+        p_party_list.append(i.text)
+    votes = content.find_all("td", {"headers": ["t1sa2 t1sb3", "t2sa2 t2sb3"]})
+    votes_list = list()
+    for i in votes:
+        votes_list.append(i.text)
+    party_dict = dict(zip(p_party_list, votes_list))
+    return party_dict
 
 
 def main():
@@ -148,7 +162,7 @@ def main():
     town_names = town_name_extractor(html_parser(sys.argv[1]))
     master_dict = master_dict_builder(town_IDs, town_names, town_links)
     individual_page_data(master_dict)
-    print(master_dict["589756"])
+    print(master_dict)
 
 
 if __name__ == "__main__":
