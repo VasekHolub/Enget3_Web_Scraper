@@ -5,6 +5,7 @@ email: vaclavholub5@seznam.cz
 discord: .avalok
 """
 from os import path
+import csv
 import sys
 import requests as rq
 from bs4 import BeautifulSoup as bs
@@ -21,7 +22,7 @@ def system_argv_validity() -> None:
             or sys.argv[2][-4:] != ".csv"
         ):
             print(
-                "Input two valid arguments.\nThe first argument must contain a part of the following url: https://volby.cz/pls/ps2017nss/.\nThe second argument must end in .csv"
+                "Input two valid arguments.\nThe first argument must contain a part of the following url: https://volby.cz/pls/ps2017nss/\nThe second argument must end in .csv"
             )
             sys.exit()
     except pathvalidate.error.InvalidCharError:
@@ -31,7 +32,7 @@ def system_argv_validity() -> None:
         sys.exit()
 
 
-def html_parser(URL: str):
+def html_parser(URL: str) -> bs:
     response = rq.get(URL)
     if response.status_code == 200:
         return bs(response.text, features="html.parser")
@@ -40,21 +41,32 @@ def html_parser(URL: str):
         sys.exit()
 
 
-def town_name_extractor(parsed_html):
+def town_name_extractor(parsed_html: bs, town_ids) -> list:
     names = list()
-    for name in parsed_html.find_all("td", {"class": "overflow_name"}):
-        names.append(name.text)
+    td_tags_overflow = parsed_html.find_all("td", {"class": "overflow_name"})
+    td_tags_alternate = parsed_html.find_all(
+        "td", {"headers": ["t1sa1 t1sb2", "t2sa1 t2sb2", "t3sa1 t3sb2"]}
+    )
+    if len(td_tags_overflow) < len(town_ids):
+        for name in td_tags_alternate:
+            names.append(name.text)
+        for name in td_tags_alternate:
+            if name.find("a") != None:
+                names.append(name.find("a").text)
+    else:
+        for name in td_tags_overflow:
+            names.append(name.text)
     return names
 
 
-def town_ID_extractor(td_tags):
+def town_ID_extractor(td_tags: bs) -> list:
     town_id = list()
     for tag in td_tags:
         town_id.append(tag.find("a").text)
     return town_id
 
 
-def town_link_extractor(td_tags):
+def town_link_extractor(td_tags: bs) -> list:
     links = list()
     for link in td_tags:
         try:
@@ -68,11 +80,11 @@ def town_link_extractor(td_tags):
     return links
 
 
-def basic_town_info_extractor(parsed_html) -> list:
+def basic_town_info_extractor(parsed_html: bs) -> list:
     td_tags = parsed_html.find_all("td", {"class": "cislo"})
     town_links = town_link_extractor(td_tags)
     town_ids = town_ID_extractor(td_tags)
-    town_names = town_name_extractor(parsed_html)
+    town_names = town_name_extractor(parsed_html, town_ids)
     return town_links, town_ids, town_names
 
 
@@ -97,10 +109,10 @@ def town_page_data_extractor(master_dict: dict) -> None:
         master_dict[i]["envelopes"] = envelope.text.replace("\xa0", " ")
         valid = content.find("td", {"headers": "sa6"})
         master_dict[i]["valid"] = valid.text.replace("\xa0", " ")
-        master_dict[i].update(party_scrape(content))
+        master_dict[i].update(p_party_scrape(content))
 
 
-def party_scrape(content) -> dict:
+def p_party_scrape(content: bs) -> dict:
     p_party = content.find_all("td", {"class": "overflow_name"})
     p_party_list = list()
     for i in p_party:
@@ -120,6 +132,16 @@ def pandas_csv_export(master_dict: dict) -> None:
     df.to_csv(path.join(sys.argv[2]), sep=";", encoding="utf-8-sig", index=False)
 
 
+def single_town_csv_export(master_dict: dict) -> None:
+    master_dict[0].pop("URL")
+    with open(
+        path.join(sys.argv[2]), mode="w", encoding="utf-8-sig", newline=""
+    ) as file:
+        writer = csv.DictWriter(file, fieldnames=master_dict[0].keys(), delimiter=";")
+        writer.writeheader()
+        writer.writerow(master_dict[0])
+
+
 def main():
     system_argv_validity()
     basic_town_info = basic_town_info_extractor(html_parser(sys.argv[1]))
@@ -129,8 +151,53 @@ def main():
         town_names=basic_town_info[2],
     )
     town_page_data_extractor(master_dict)
-    pandas_csv_export(master_dict)
+    if len(master_dict) > 1:
+        pandas_csv_export(master_dict)
+    else:
+        single_town_csv_export(master_dict)
 
 
 if __name__ == "__main__":
     main()
+
+
+# Test functions that allow to go through all avaliable dictricts except 'Zahranici'
+# For it to work, all sys.argv variables in the code have to be replaced with the arguments list
+
+"""
+def test():
+    content = html_parser("https://volby.cz/pls/ps2017nss/ps3?xjazyk=CZ")
+    c = 1
+    href_list = list()
+    while c < 15:
+        td_tags = list()
+        td = content.find_all("td", {"headers": f"t{c}sa3"})
+        for i in td:
+            td_tags.append(i.find_all("a"))
+        for i in td_tags:
+            for k in i:
+                href_list.append("https://volby.cz/pls/ps2017nss/" + k.get("href"))
+        c = c + 1
+    href_list.remove("https://volby.cz/pls/ps2017nss/ps36?xjazyk=CZ")
+    return href_list
+
+def main_test():
+    master_urls = test()
+    for i in master_urls:
+        argumets = [
+            i,
+            f"test_{master_urls.index(i)+1}_results.csv",
+        ]
+        system_argv_validity(argumets)
+        basic_town_info = basic_town_info_extractor(html_parser(argumets[0]))
+        master_dict = master_dict_builder(
+            town_links=basic_town_info[0],
+            town_IDs=basic_town_info[1],
+            town_names=basic_town_info[2],
+        )
+        town_page_data_extractor(master_dict)
+        if len(master_dict) > 1:
+        pandas_csv_export(master_dict, argumets)
+        else:
+        single_town_csv_export(master_dict, argumets)
+    """
