@@ -139,7 +139,7 @@ def p_party_scrape(content: bs) -> dict:
     votes = content.find_all("td", {"headers": ["t1sa2 t1sb3", "t2sa2 t2sb3"]})
     votes_list = list()
     for i in votes:
-        votes_list.append(i.text)
+        votes_list.append(i.text.replace("\xa0", " "))
     party_dict = dict(zip(p_party_list, votes_list))
     return party_dict
 
