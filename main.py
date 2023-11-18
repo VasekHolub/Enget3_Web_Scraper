@@ -14,6 +14,10 @@ import pathvalidate
 
 
 def system_argv_validity() -> None:
+    # validates 2 system arguments provided by the user when launching the script.
+    # it first checks if the chosen name of csv file is in accordance with naming conventions of the users OS using the pathvalidate library and alerts the user if it is not.
+    # it then checks if the first argument passed contains a relevant part of the URL of the website which is being scraped and the second argument ends in .csv.
+    # if user provides wrong arguments, this function alerts them and exits the script.
     try:
         pathvalidate.validate_filename(sys.argv[2])
         if (
@@ -33,30 +37,14 @@ def system_argv_validity() -> None:
 
 
 def html_parser(URL: str) -> bs:
+    # function checks for positive 200 response from the selected website and returns parsed html using BeautifulSoup.
+    # if the server response is anything other than 200 it logs the status code to the user and exits.
     response = rq.get(URL)
     if response.status_code == 200:
         return bs(response.text, features="html.parser")
     else:
         print(f"URL error {response.status_code}")
         sys.exit()
-
-
-def town_name_extractor(parsed_html: bs, town_ids) -> list:
-    names = list()
-    td_tags_overflow = parsed_html.find_all("td", {"class": "overflow_name"})
-    td_tags_alternate = parsed_html.find_all(
-        "td", {"headers": ["t1sa1 t1sb2", "t2sa1 t2sb2", "t3sa1 t3sb2"]}
-    )
-    if len(td_tags_overflow) < len(town_ids):
-        for name in td_tags_alternate:
-            names.append(name.text)
-        for name in td_tags_alternate:
-            if name.find("a") != None:
-                names.append(name.find("a").text)
-    else:
-        for name in td_tags_overflow:
-            names.append(name.text)
-    return names
 
 
 def town_ID_extractor(td_tags: bs) -> list:
@@ -66,7 +54,31 @@ def town_ID_extractor(td_tags: bs) -> list:
     return town_id
 
 
+def town_name_extractor(parsed_html: bs, town_ids: list) -> list:
+    # town names in scraped tables are not consistent, therefore this function creates two parsed html objects - one containing tags in which the names are primarily located and second containing secondary tags in which names are stored.
+    # function then checks if length of primary tags corresponds to the length of town_id list - if it does not, it means that a name is missing and the function checks for it in the secondary BeautifulSoup object.
+    # it also makes sure, to check for town names inside anchor elements.
+    # it then appends the names to the names list either from the primary or secondary source and returns the names list.
+    names = list()
+    td_tags_primary = parsed_html.find_all("td", {"class": "overflow_name"})
+    td_tags_secondary = parsed_html.find_all(
+        "td", {"headers": ["t1sa1 t1sb2", "t2sa1 t2sb2", "t3sa1 t3sb2"]}
+    )
+    if len(td_tags_primary) < len(town_ids):
+        for name in td_tags_secondary:
+            names.append(name.text)
+        for name in td_tags_secondary:
+            if name.find("a") != None:
+                names.append(name.find("a").text)
+    else:
+        for name in td_tags_primary:
+            names.append(name.text)
+    return names
+
+
 def town_link_extractor(td_tags: bs) -> list:
+    # function extracts the href content from anchor elements provided in td_tags if the first two characters of the href are "ps" and it does not correspond to unwanted URLs.
+    # function then combines the href content with the first part of the URL to create a functional URL.
     links = list()
     for link in td_tags:
         try:
@@ -81,6 +93,7 @@ def town_link_extractor(td_tags: bs) -> list:
 
 
 def basic_town_info_extractor(parsed_html: bs) -> list:
+    # function compiles information into a list containing all town_lins, town_ids and town_names of the scraped URL.
     td_tags = parsed_html.find_all("td", {"class": "cislo"})
     town_links = town_link_extractor(td_tags)
     town_ids = town_ID_extractor(td_tags)
@@ -89,6 +102,8 @@ def basic_town_info_extractor(parsed_html: bs) -> list:
 
 
 def master_dict_builder(town_links: list, town_IDs: list, town_names: list) -> dict:
+    # function combines three lists of town_links, town_IDs and town_names into a master_dict using the zip function.
+    # master_dict is used throughout the script to contain dictionaries where each contains all relevant information on one town.
     master_dict = dict()
     count = 0
     while count <= len(town_IDs) - 1:
@@ -101,6 +116,8 @@ def master_dict_builder(town_links: list, town_IDs: list, town_names: list) -> d
 
 
 def town_page_data_extractor(master_dict: dict) -> None:
+    # function modifies the master_dist of every town with data on registered voters, handed out envelopes and valid votes.
+    # it then calls the p_party_scrape function and updates the master_dict with data on political parties and the votes they received for every town.
     for i in master_dict:
         content = html_parser(master_dict[i]["URL"])
         registered = content.find("td", {"headers": "sa2"})
@@ -113,6 +130,8 @@ def town_page_data_extractor(master_dict: dict) -> None:
 
 
 def p_party_scrape(content: bs) -> dict:
+    # function scrapes the selected town site for data on political party names and the votes they received.
+    # it then return a dict created from this information, where keys are party names and values are votes received.
     p_party = content.find_all("td", {"class": "overflow_name"})
     p_party_list = list()
     for i in p_party:
@@ -161,8 +180,8 @@ if __name__ == "__main__":
     main()
 
 
-# Test functions that allow to go through all avaliable dictricts except 'Zahranici'
-# For it to work, all sys.argv variables in the code have to be replaced with the arguments list
+# Test functions that allow to go through all available districts except 'Zahranici'.
+# For it to work, all sys.argv variables in the code have to be replaced with the arguments list.
 
 """
 def test():
